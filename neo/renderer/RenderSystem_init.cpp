@@ -2475,7 +2475,7 @@ idFont* idRenderSystemLocal::RegisterFont( const char* fontName, bool exact )
 	baseFontName.Replace( "fonts/", "" );
 	for( int i = 0; i < fonts.Num(); i++ )
 	{
-		if( idStr::Icmp( fonts[i]->GetName(), baseFontName ) == 0 && ( !exact || fonts[i]->HasOwnFontData() ) )
+		if( idStr::Icmp( fonts[i]->GetName(), baseFontName ) == 0 && ( !exact || fonts[i]->IsExactFont() ) )
 		{
 			fonts[i]->Touch();
 			return fonts[i];

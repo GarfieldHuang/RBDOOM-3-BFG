@@ -45,6 +45,8 @@ public:
 
 	void Touch();
 	bool HasOwnFontData() const { return fontInfo != NULL; }
+	bool IsExactFont() const { return exactFont; }
+	bool HasGlyph( uint32 codepoint ) const;
 
 	const char* GetName() const
 	{
@@ -101,6 +103,7 @@ private:
 
 	// base name of the font (minus "fonts/" and ".dat")
 	idStr			name;
+	bool			exactFont;
 
 	// Fonts can be aliases to other fonts
 	idFont* alias;

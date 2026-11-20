@@ -299,9 +299,13 @@ idFont* Subtitles_PrepareFont()
 		lastLocalized = localized;
 		const idFont* loaded = requested.IsEmpty() ? NULL : renderSystem->RegisterFont( requested.c_str(), true );
 		// Use the installed translation's physical font data independently of the GUI aliases.
-		if( loaded == NULL && requested.Icmp( "chinese" ) != 0 )
+		if( loaded == NULL || !loaded->HasGlyph( 0x6211 ) )
 		{
-			loaded = renderSystem->RegisterFont( "chinese", true );
+			const idFont* chinese = renderSystem->RegisterFont( "chinese", true );
+			if( chinese != NULL && chinese->HasGlyph( 0x6211 ) )
+			{
+				loaded = chinese;
+			}
 		}
 		if( loaded == NULL && !localized.IsEmpty() && localized.Icmp( "chinese" ) != 0 && localized.Icmp( requested ) != 0 )
 		{

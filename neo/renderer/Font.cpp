@@ -102,7 +102,7 @@ idFont::~idFont()
 idFont::idFont
 ==============================
 */
-idFont::idFont( const char* n, bool exact ) : name( n ), fontInfo( NULL ), alias( NULL )
+idFont::idFont( const char* n, bool exact ) : name( n ), exactFont( exact ), alias( NULL ), fontInfo( NULL )
 {
 	if( exact )
 	{
@@ -200,7 +200,19 @@ idFont::LoadFont
 bool idFont::LoadFont()
 {
 	const idStr fontName = "newfonts/" + name + "/48.dat";
-	idFile* fd = fileSystem->OpenFileRead( fontName );
+	idFile* fd = NULL;
+	if( exactFont )
+	{
+		// Prefer the loose font beside the executable over any save or resource overlay.
+		idStr installedPath = Sys_DefaultBasePath();
+		installedPath.AppendPath( BASE_GAMEDIR );
+		installedPath.AppendPath( fontName.c_str() );
+		fd = fileSystem->OpenExplicitFileRead( installedPath.c_str() );
+	}
+	if( fd == NULL )
+	{
+		fd = fileSystem->OpenFileRead( fontName.c_str() );
+	}
 	if( fd == NULL )
 	{
 		return false;
@@ -336,19 +348,26 @@ int	idFont::GetGlyphIndex( uint32 idx ) const
 	{
 		return idx;
 	}
-	int len = fontInfo->numGlyphs;
-	int mid = fontInfo->numGlyphs;
-	int offset = 0;
-	while( mid > 0 )
+	int first = 0;
+	int last = fontInfo->numGlyphs;
+	while( first < last )
 	{
-		mid = len >> 1;
-		if( fontInfo->charIndex[offset + mid] <= idx )
+		const int middle = first + ( last - first ) / 2;
+		if( fontInfo->charIndex[middle] < idx )
 		{
-			offset += mid;
+			first = middle + 1;
 		}
-		len -= mid;
+		else
+		{
+			last = middle;
+		}
 	}
-	return ( fontInfo->charIndex[offset] == idx ) ? offset : -1;
+	return first < fontInfo->numGlyphs && fontInfo->charIndex[first] == idx ? first : -1;
+}
+
+bool idFont::HasGlyph( uint32 codepoint ) const
+{
+	return alias != NULL ? alias->HasGlyph( codepoint ) : fontInfo != NULL && GetGlyphIndex( codepoint ) >= 0;
 }
 
 /*
