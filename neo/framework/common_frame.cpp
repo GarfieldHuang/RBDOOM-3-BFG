@@ -34,6 +34,10 @@ If you have questions concerning this license or the applicable additional terms
 #include "Common_local.h"
 #include "../renderer/Image.h"
 
+idFont* Subtitles_PrepareFont();
+void Subtitles_Draw( const idFont* font );
+static idFont* frameSubtitleFont = NULL;
+
 // RB begin
 #if defined(USE_DOOMCLASSIC)
 	#include "../../doomclassic/doom/doomlib.h"
@@ -393,8 +397,13 @@ void idCommonLocal::Draw()
 		}
 
 		// doom3bfg-cht: voice-over subtitles on top of the game view
-		extern void Subtitles_Draw();
-		Subtitles_Draw();
+		const idFont* subtitleFont = frameSubtitleFont;
+		if( subtitleFont == NULL && idLib::IsMainThread() )
+		{
+			// Screenshots and out-of-sequence screen updates draw on the main thread.
+			subtitleFont = Subtitles_PrepareFont();
+		}
+		Subtitles_Draw( subtitleFont );
 	}
 	else
 	{
@@ -890,6 +899,8 @@ void idCommonLocal::Frame()
 #endif
 		// RB end
 
+		// Resolve subtitle assets before the frontend and renderer run in parallel.
+		frameSubtitleFont = mapSpawned ? Subtitles_PrepareFont() : NULL;
 		// start the game / draw command generation thread going in the background
 		gameReturn_t ret = gameThread.RunGameAndDraw( numGameFrames, userCmdMgr, IsClient(), gameFrame - numGameFrames );
 
@@ -918,6 +929,7 @@ void idCommonLocal::Frame()
 		// make sure the game / draw thread has completed
 		// This may block if the game is taking longer than the render back end
 		gameThread.WaitForThread();
+		frameSubtitleFont = NULL;
 
 		// SRS - Use finishSyncTime_EndFrame to record timing just after gameThread.WaitForThread()
 		frameTiming.finishSyncTime_EndFrame = Sys_Microseconds();

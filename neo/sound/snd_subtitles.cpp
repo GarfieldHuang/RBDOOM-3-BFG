@@ -21,6 +21,7 @@ like the rest of the engine source.
 #pragma hdrstop
 
 #include "snd_local.h"
+#include "../renderer/GLState.h"
 
 bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
 
@@ -104,7 +105,7 @@ void ParseCues( const char* value, idList<subCue_t>& cues )
 }
 
 // draws one line of UTF-8 text with its baseline at y, returns nothing
-void DrawLine( idFont* font, float scale, const idStr& text, float x, float y )
+void DrawLine( const idFont* font, float scale, const idStr& text, float x, float y )
 {
 	int i = 0;
 	while( i < text.Length() )
@@ -124,7 +125,7 @@ void DrawLine( idFont* font, float scale, const idStr& text, float x, float y )
 	}
 }
 
-float LineWidth( idFont* font, float scale, const idStr& text )
+float LineWidth( const idFont* font, float scale, const idStr& text )
 {
 	float w = 0.0f;
 	int i = 0;
@@ -142,7 +143,7 @@ float LineWidth( idFont* font, float scale, const idStr& text )
 
 // break a cue into lines no wider than maxWidth; CJK text can break anywhere,
 // latin words are kept together when possible
-void WrapText( idFont* font, float scale, const idStr& text, float maxWidth, idStrList& lines )
+void WrapText( const idFont* font, float scale, const idStr& text, float maxWidth, idStrList& lines )
 {
 	idStr line;
 	float lineW = 0.0f;
@@ -274,12 +275,40 @@ void Subtitles_Clear()
 
 /*
 ========================
+Subtitles_PrepareFont
+
+Run on the main thread before the game/draw job starts.
+========================
+*/
+idFont* Subtitles_PrepareFont()
+{
+	if( !s_subtitles.GetBool() )
+	{
+		return NULL;
+	}
+
+	static idStr checkedFont;
+	static bool fontExists = false;
+	static int retryTime = 0;
+	const int now = Sys_Milliseconds();
+	if( checkedFont != s_subtitleFont.GetString() || ( !fontExists && now >= retryTime ) )
+	{
+		checkedFont = s_subtitleFont.GetString();
+		const idStr path = "newfonts/" + checkedFont + "/48.dat";
+		fontExists = !checkedFont.IsEmpty() && fileSystem->ReadFile( path.c_str(), NULL ) > 0;
+		retryTime = now + 1000;
+	}
+	return renderSystem->RegisterFont( fontExists ? checkedFont.c_str() : s_subtitleFallbackFont.GetString() );
+}
+
+/*
+========================
 Subtitles_Draw
 
 Called from idCommonLocal::Draw after the game view.
 ========================
 */
-void Subtitles_Draw()
+void Subtitles_Draw( const idFont* font )
 {
 	idSoundWorldLocal* world = soundSystemLocal.currentSoundWorld;
 	if( !s_subtitles.GetBool() || world == NULL )
@@ -360,14 +389,6 @@ void Subtitles_Draw()
 		return;
 	}
 
-	static idStr checkedFont;
-	static bool fontExists = false;
-	if( checkedFont != s_subtitleFont.GetString() )
-	{
-		checkedFont = s_subtitleFont.GetString();
-		fontExists = fileSystem->ReadFile( va( "newfonts/%s/48.dat", checkedFont.c_str() ), NULL ) > 0;
-	}
-	idFont* font = renderSystem->RegisterFont( fontExists ? s_subtitleFont.GetString() : s_subtitleFallbackFont.GetString() );
 	if( font == NULL )
 	{
 		return;
@@ -385,6 +406,9 @@ void Subtitles_Draw()
 	idStrList lines;
 	WrapText( font, scale, shown, maxWidth, lines );
 
+	// Match the SWF text blend state for the font atlas.
+	renderSystem->SetGLState( GLS_OVERRIDE | GLS_DEPTHFUNC_LESS | GLS_DEPTHMASK
+		| GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 	float y = virtH * 0.88f - ( lines.Num() - 1 ) * lineHeight;
 	for( int i = 0; i < lines.Num(); i++ )
 	{
@@ -403,4 +427,5 @@ void Subtitles_Draw()
 		y += lineHeight;
 	}
 	renderSystem->SetColor4( 1.0f, 1.0f, 1.0f, 1.0f );
+	renderSystem->SetGLState( 0 );
 }
