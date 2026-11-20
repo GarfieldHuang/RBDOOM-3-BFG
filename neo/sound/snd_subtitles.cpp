@@ -24,6 +24,7 @@ like the rest of the engine source.
 #include "../renderer/GLState.h"
 
 bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
+const idFont* Subtitles_GetHudFont();
 
 idCVar s_subtitles( "s_subtitles", "1", CVAR_SOUND | CVAR_BOOL | CVAR_ARCHIVE, "show subtitles for voice-over" );
 idCVar s_subtitleScale( "s_subtitleScale", "0.34", CVAR_SOUND | CVAR_FLOAT | CVAR_ARCHIVE, "subtitle text scale (48 pt font units)" );
@@ -397,6 +398,14 @@ void Subtitles_Draw( const idFont* font )
 		return;
 	}
 
+	if( s_subtitleFont.GetString()[0] == '\0' )
+	{
+		const idFont* hudFont = Subtitles_GetHudFont();
+		if( hudFont != NULL )
+		{
+			font = hudFont;
+		}
+	}
 	if( font == NULL )
 	{
 		return;
@@ -414,8 +423,8 @@ void Subtitles_Draw( const idFont* font )
 	idStrList lines;
 	WrapText( font, scale, shown, maxWidth, lines );
 
-	// Match the SWF text blend state for the font atlas.
-	renderSystem->SetGLState( GLS_OVERRIDE | GLS_DEPTHFUNC_LESS | GLS_DEPTHMASK
+	// Match SWF text blending and draw the overlay independently of scene depth.
+	renderSystem->SetGLState( GLS_OVERRIDE | GLS_DEPTHFUNC_ALWAYS | GLS_DEPTHMASK
 		| GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 	float y = virtH * 0.88f - ( lines.Num() - 1 ) * lineHeight;
 	for( int i = 0; i < lines.Num(); i++ )
