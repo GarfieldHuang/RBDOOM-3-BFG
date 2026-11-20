@@ -289,7 +289,7 @@ public:
 	virtual bool			AreAutomaticBackgroundSwapsRunning( autoRenderIconType_t* icon = NULL ) const = 0;
 
 	// font support
-	virtual class idFont* 	RegisterFont( const char* fontName ) = 0;
+	virtual class idFont* 	RegisterFont( const char* fontName, bool exact = false ) = 0;
 	virtual void			ResetFonts() = 0;
 
 	virtual void			SetColor( const idVec4& rgba ) = 0;

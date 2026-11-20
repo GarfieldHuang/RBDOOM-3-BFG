@@ -2468,20 +2468,25 @@ bool idRenderSystemLocal::AreAutomaticBackgroundSwapsRunning( autoRenderIconType
 idRenderSystemLocal::RegisterFont
 ============
 */
-idFont* idRenderSystemLocal::RegisterFont( const char* fontName )
+idFont* idRenderSystemLocal::RegisterFont( const char* fontName, bool exact )
 {
 
 	idStrStatic< MAX_OSPATH > baseFontName = fontName;
 	baseFontName.Replace( "fonts/", "" );
 	for( int i = 0; i < fonts.Num(); i++ )
 	{
-		if( idStr::Icmp( fonts[i]->GetName(), baseFontName ) == 0 )
+		if( idStr::Icmp( fonts[i]->GetName(), baseFontName ) == 0 && ( !exact || fonts[i]->HasOwnFontData() ) )
 		{
 			fonts[i]->Touch();
 			return fonts[i];
 		}
 	}
-	idFont* newFont = new( TAG_FONT ) idFont( baseFontName );
+	idFont* newFont = new( TAG_FONT ) idFont( baseFontName, exact );
+	if( exact && !newFont->HasOwnFontData() )
+	{
+		delete newFont;
+		return NULL;
+	}
 	fonts.Append( newFont );
 	return newFont;
 }

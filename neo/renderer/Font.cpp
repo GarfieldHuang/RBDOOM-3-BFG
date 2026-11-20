@@ -102,9 +102,13 @@ idFont::~idFont()
 idFont::idFont
 ==============================
 */
-idFont::idFont( const char* n ) : name( n )
+idFont::idFont( const char* n, bool exact ) : name( n ), fontInfo( NULL ), alias( NULL )
 {
-	fontInfo = NULL;
+	if( exact )
+	{
+		LoadFont();
+		return;
+	}
 	alias = RemapFont( n );
 
 	if( alias != NULL )
@@ -195,7 +199,7 @@ idFont::LoadFont
 */
 bool idFont::LoadFont()
 {
-	idStr fontName = va( "newfonts/%s/48.dat", GetName() );
+	const idStr fontName = "newfonts/" + name + "/48.dat";
 	idFile* fd = fileSystem->OpenFileRead( fontName );
 	if( fd == NULL )
 	{

@@ -1808,7 +1808,7 @@ idFileSystemLocal::BuildOSPath
 */
 const char* idFileSystemLocal::BuildOSPath( const char* base, const char* game, const char* relativePath )
 {
-	static char OSPath[MAX_STRING_CHARS];
+	static thread_local char OSPath[MAX_STRING_CHARS];
 	idStr newPath;
 
 	// handle case of this already being an OS path

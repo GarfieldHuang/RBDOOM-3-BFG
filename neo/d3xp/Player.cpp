@@ -5798,22 +5798,6 @@ bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int
 	return true;
 }
 
-const idFont* Subtitles_GetHudFont()
-{
-	idPlayer* player = gameLocal.GetLocalPlayer();
-	idSWF* gui = player != NULL && player->hudManager != NULL ? player->hudManager->GetGUI() : NULL;
-	if( gui == NULL )
-	{
-		return NULL;
-	}
-
-	// This is the font of the HUD location label, which uses localized text.
-	const idSWFTextInstance* location = gui->GetRootObject().GetNestedText( "_bottomLeft", "location", "txtVal" );
-	const idSWFEditText* editText = location != NULL ? location->GetEditText() : NULL;
-	const idSWFDictionaryEntry* entry = editText != NULL ? gui->FindDictionaryEntry( editText->fontID, SWF_DICT_FONT ) : NULL;
-	return entry != NULL && entry->font != NULL ? entry->font->fontID : NULL;
-}
-
 /*
 ===============
 idPlayer::LowerWeapon

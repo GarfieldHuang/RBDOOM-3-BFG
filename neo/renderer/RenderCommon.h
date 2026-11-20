@@ -892,7 +892,7 @@ public:
 	virtual void			EndAutomaticBackgroundSwaps();
 	virtual bool			AreAutomaticBackgroundSwapsRunning( autoRenderIconType_t* usingAlternateIcon = NULL ) const;
 
-	virtual idFont* 		RegisterFont( const char* fontName );
+	virtual idFont* 		RegisterFont( const char* fontName, bool exact = false );
 	virtual void			ResetFonts();
 	virtual void			PrintMemInfo( MemInfo_t* mi );
 

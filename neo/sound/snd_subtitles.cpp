@@ -24,11 +24,10 @@ like the rest of the engine source.
 #include "../renderer/GLState.h"
 
 bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
-const idFont* Subtitles_GetHudFont();
 
 idCVar s_subtitles( "s_subtitles", "1", CVAR_SOUND | CVAR_BOOL | CVAR_ARCHIVE, "show subtitles for voice-over" );
 idCVar s_subtitleScale( "s_subtitleScale", "0.34", CVAR_SOUND | CVAR_FLOAT | CVAR_ARCHIVE, "subtitle text scale (48 pt font units)" );
-idCVar s_subtitleFont( "s_subtitleFont", "", CVAR_SOUND, "subtitle font override (empty uses the localized UI font)" );
+idCVar s_subtitleFont( "s_subtitleFont", "", CVAR_SOUND, "subtitle font override (empty uses the installed translation font)" );
 idCVar s_subtitleFallbackFont( "s_subtitleFallbackFont", "Arial_Narrow", CVAR_SOUND, "font used when no localized subtitle font is available" );
 idCVar s_subtitleDebug( "s_subtitleDebug", "0", CVAR_SOUND | CVAR_BOOL, "print voice-over samples that have no subtitle" );
 
@@ -286,28 +285,38 @@ idFont* Subtitles_PrepareFont()
 		return NULL;
 	}
 
-	const char* requestedFont = s_subtitleFont.GetString();
-	const char* localizedFont = idLocalization::FindString( "#font_*" );
-	const char* fallbackFont = localizedFont != NULL && localizedFont[0] != '\0'
-		? localizedFont : s_subtitleFallbackFont.GetString();
-	if( requestedFont[0] == '\0' || idStr::Icmp( requestedFont, fallbackFont ) == 0 )
-	{
-		// Use the same registered font as the UI, even if a file probe would fail.
-		return renderSystem->RegisterFont( fallbackFont );
-	}
-
-	static idStr checkedFont;
-	static bool fontExists = false;
+	const idStr requested = s_subtitleFont.GetString();
+	const char* localizedName = idLocalization::FindString( "#font_*" );
+	const idStr localized = localizedName != NULL ? localizedName : "";
+	static idStr lastRequest;
+	static idStr lastLocalized;
+	static idStr resolved;
 	static int retryTime = 0;
 	const int now = Sys_Milliseconds();
-	if( checkedFont != requestedFont || ( !fontExists && now >= retryTime ) )
+	if( requested != lastRequest || localized != lastLocalized || ( resolved.IsEmpty() && now >= retryTime ) )
 	{
-		checkedFont = requestedFont;
-		const idStr path = "newfonts/" + checkedFont + "/48.dat";
-		fontExists = fileSystem->ReadFile( path.c_str(), NULL ) > 0;
+		lastRequest = requested;
+		lastLocalized = localized;
+		const idFont* loaded = requested.IsEmpty() ? NULL : renderSystem->RegisterFont( requested.c_str(), true );
+		// Use the installed translation's physical font data independently of the GUI aliases.
+		if( loaded == NULL && requested.Icmp( "chinese" ) != 0 )
+		{
+			loaded = renderSystem->RegisterFont( "chinese", true );
+		}
+		if( loaded == NULL && !localized.IsEmpty() && localized.Icmp( "chinese" ) != 0 && localized.Icmp( requested ) != 0 )
+		{
+			loaded = renderSystem->RegisterFont( localized.c_str(), true );
+		}
+		resolved = loaded != NULL ? loaded->GetName() : "";
 		retryTime = now + 1000;
 	}
-	return renderSystem->RegisterFont( fontExists ? checkedFont.c_str() : fallbackFont );
+	idFont* font = resolved.IsEmpty() ? NULL : renderSystem->RegisterFont( resolved.c_str(), true );
+	if( font == NULL )
+	{
+		resolved.Clear();
+		return renderSystem->RegisterFont( s_subtitleFallbackFont.GetString() );
+	}
+	return font;
 }
 
 /*
@@ -398,14 +407,6 @@ void Subtitles_Draw( const idFont* font )
 		return;
 	}
 
-	if( s_subtitleFont.GetString()[0] == '\0' )
-	{
-		const idFont* hudFont = Subtitles_GetHudFont();
-		if( hudFont != NULL )
-		{
-			font = hudFont;
-		}
-	}
 	if( font == NULL )
 	{
 		return;

@@ -40,10 +40,11 @@ struct scaledGlyphInfo_t
 class idFont
 {
 public:
-	idFont( const char* n );
+	idFont( const char* n, bool exact = false );
 	~idFont();
 
 	void Touch();
+	bool HasOwnFontData() const { return fontInfo != NULL; }
 
 	const char* GetName() const
 	{
