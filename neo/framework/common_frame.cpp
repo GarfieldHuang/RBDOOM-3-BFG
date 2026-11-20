@@ -391,6 +391,10 @@ void idCommonLocal::Draw()
 			renderSystem->SetColor( colorBlack );
 			renderSystem->DrawStretchPic( 0, 0, renderSystem->GetVirtualWidth(), renderSystem->GetVirtualHeight(), 0, 0, 1, 1, whiteMaterial );
 		}
+
+		// doom3bfg-cht: voice-over subtitles on top of the game view
+		extern void Subtitles_Draw();
+		Subtitles_Draw();
 	}
 	else
 	{
