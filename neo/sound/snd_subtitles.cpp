@@ -24,7 +24,10 @@ like the rest of the engine source.
 
 idCVar s_subtitles( "s_subtitles", "1", CVAR_SOUND | CVAR_BOOL | CVAR_ARCHIVE, "show subtitles for voice-over" );
 idCVar s_subtitleScale( "s_subtitleScale", "0.34", CVAR_SOUND | CVAR_FLOAT | CVAR_ARCHIVE, "subtitle text scale (48 pt font units)" );
-idCVar s_subtitleFont( "s_subtitleFont", "Arial_Narrow", CVAR_SOUND | CVAR_ARCHIVE, "font used for subtitles (remapped by the language file)" );
+// Use the localized font directly: fonts registered before the language dictionary
+// is loaded (e.g. Arial_Narrow) are cached without the "#font_*" remap and lack CJK glyphs.
+idCVar s_subtitleFont( "s_subtitleFont", "chinese", CVAR_SOUND, "font used for subtitles (newfonts/<name>/48.dat)" );
+idCVar s_subtitleFallbackFont( "s_subtitleFallbackFont", "Arial_Narrow", CVAR_SOUND, "font used when s_subtitleFont is missing" );
 idCVar s_subtitleDebug( "s_subtitleDebug", "0", CVAR_SOUND | CVAR_BOOL, "print voice-over samples that have no subtitle" );
 
 namespace
@@ -293,7 +296,14 @@ void Subtitles_Draw()
 		return;
 	}
 
-	idFont* font = renderSystem->RegisterFont( s_subtitleFont.GetString() );
+	static idStr checkedFont;
+	static bool fontExists = false;
+	if( checkedFont != s_subtitleFont.GetString() )
+	{
+		checkedFont = s_subtitleFont.GetString();
+		fontExists = fileSystem->ReadFile( va( "newfonts/%s/48.dat", checkedFont.c_str() ), NULL ) > 0;
+	}
+	idFont* font = renderSystem->RegisterFont( fontExists ? s_subtitleFont.GetString() : s_subtitleFallbackFont.GetString() );
 	if( font == NULL )
 	{
 		return;
