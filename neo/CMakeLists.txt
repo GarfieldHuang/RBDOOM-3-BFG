@@ -565,6 +565,7 @@ set(SOUND_INCLUDES
 set(SOUND_SOURCES
 	sound/snd_decoder.cpp
 	sound/snd_emitter.cpp
+	sound/snd_subtitles.cpp
 	sound/snd_shader.cpp
 	sound/snd_system.cpp
 	sound/snd_world.cpp
