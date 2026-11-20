@@ -5763,12 +5763,13 @@ void idPlayer::Weapon_NPC()
 		if( !common->IsMultiplayer() && this == gameLocal.GetLocalPlayer() && focusCharacter->GetTalkState() == TALK_OK )
 		{
 			subtitleTalkTarget = focusCharacter;
+			Subtitles_BeginConversation( gameSoundWorld );
 		}
 		focusCharacter->TalkTo( this );
 	}
 }
 
-bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking )
+bool Subtitles_GetConversation( const idSoundWorld* world, const idSoundEmitter*& bodyEmitter, const idSoundEmitter*& headEmitter, bool& talking )
 {
 	if( world != gameSoundWorld )
 	{
@@ -5785,11 +5786,9 @@ bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int
 		return false;
 	}
 
-	const idSoundEmitter* body = speaker->GetSoundEmitter();
+	bodyEmitter = speaker->GetSoundEmitter();
 	const idEntity* headEntity = speaker->GetHeadEntity();
-	const idSoundEmitter* head = headEntity != NULL ? headEntity->GetSoundEmitter() : NULL;
-	bodyEmitter = body != NULL ? body->Index() : -1;
-	headEmitter = head != NULL ? head->Index() : -1;
+	headEmitter = headEntity != NULL ? headEntity->GetSoundEmitter() : NULL;
 	talking = player->health > 0 && speaker->IsTalkingTo( player );
 	if( !talking )
 	{

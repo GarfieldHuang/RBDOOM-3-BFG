@@ -921,7 +921,7 @@ int idSoundEmitterLocal::StartSound( const idSoundShader* shader, const s_channe
 		chan->endTime = chan->startTime + length + 100;
 	}
 	// doom3bfg-cht: voice-over subtitles
-	Subtitles_SoundStarted( soundWorld, origin, emitterId, index, chanParms, leadinSample->GetName(), chan->startTime );
+	Subtitles_SoundStarted( soundWorld, chan, length );
 
 	if( showStartSound )
 	{
@@ -979,6 +979,7 @@ void idSoundEmitterLocal::StopSound( const s_channelType channel )
 
 		// This forces CheckForCompletion to return true
 		chan->endTime = 1;
+		Subtitles_SoundStopped( chan );
 	}
 }
 

@@ -196,7 +196,7 @@ idSound::Event_Timer
 */
 void idSound::Event_Timer()
 {
-	DoSound( true );
+	DoSound( true, true );
 	PostEventSec( &EV_Speaker_Timer, wait + gameLocal.random.CRandomFloat() * random );
 }
 
@@ -297,11 +297,12 @@ void idSound::SetSound( const char* sound, int channel )
 idSound::DoSound
 ================
 */
-void idSound::DoSound( bool play )
+void idSound::DoSound( bool play, bool timed )
 {
 	if( play )
 	{
-		StartSoundShader( refSound.shader, SND_CHANNEL_ANY, refSound.parms.soundShaderFlags, true, &playingUntilTime );
+		const int flags = refSound.parms.soundShaderFlags | ( timed ? SSF_NO_SUBTITLES : 0 );
+		StartSoundShader( refSound.shader, SND_CHANNEL_ANY, flags, true, &playingUntilTime );
 		playingUntilTime += gameLocal.time;
 	}
 	else

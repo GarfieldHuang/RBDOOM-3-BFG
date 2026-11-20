@@ -23,7 +23,7 @@ like the rest of the engine source.
 #include "snd_local.h"
 #include "../renderer/GLState.h"
 
-bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
+bool Subtitles_GetConversation( const idSoundWorld* world, const idSoundEmitter*& bodyEmitter, const idSoundEmitter*& headEmitter, bool& talking );
 
 idCVar s_subtitles( "s_subtitles", "1", CVAR_SOUND | CVAR_BOOL | CVAR_ARCHIVE, "show subtitles for voice-over" );
 idCVar s_subtitleScale( "s_subtitleScale", "0.34", CVAR_SOUND | CVAR_FLOAT | CVAR_ARCHIVE, "subtitle text scale (48 pt font units)" );
@@ -38,13 +38,15 @@ struct subCue_t
 {
 	int		startMs;
 	int		endMs;
+	bool	presented;
 	idStr	text;
 };
 
 struct activeSub_t
 {
 	idSoundWorldLocal*	world;
-	int					emitterIndex;
+	const idSoundChannel* playback;
+	int					emitterId;
 	int					startTime;		// sound world time the sample started
 	int					endTime;		// last cue end, in sound world time
 	idStr				name;
@@ -52,19 +54,44 @@ struct activeSub_t
 };
 
 idList<activeSub_t> activeSubs;
+const idSoundChannel* visiblePlayback = NULL;
+int visibleCue = -1;
+
+struct conversationVoice_t
+{
+	idSoundWorldLocal* world;
+	int emitterId;
+	idStr name;
+};
+
+idList<conversationVoice_t> conversationVoices;
+
+bool WasConversationVoice( const activeSub_t& sub )
+{
+	for( const conversationVoice_t& voice : conversationVoices )
+	{
+		if( voice.world == sub.world && voice.emitterId == sub.emitterId && voice.name == sub.name )
+		{
+			return true;
+		}
+	}
+	return false;
+}
 
 struct subtitleConversation_t
 {
 	idSoundWorldLocal*	world = NULL;
-	int					bodyEmitter = -1;
-	int					headEmitter = -1;
+	const idSoundEmitter* bodyEmitter = NULL;
+	const idSoundEmitter* headEmitter = NULL;
 	bool				talking = false;
+	int					firstStartTime = 0;
 	int					lastStartTime = 0;
 
 	bool Matches( const activeSub_t& sub ) const
 	{
 		return sub.world == world
-			&& ( sub.emitterIndex == bodyEmitter || sub.emitterIndex == headEmitter )
+			&& ( sub.playback->emitter == bodyEmitter || sub.playback->emitter == headEmitter )
+			&& sub.startTime >= firstStartTime
 			&& ( talking || sub.startTime <= lastStartTime );
 	}
 };
@@ -98,6 +125,7 @@ void ParseCues( const char* value, idList<subCue_t>& cues )
 		subCue_t& cue = cues.Alloc();
 		cue.startMs = idMath::Ftoi( atof( line.Left( bar1 ).c_str() ) * 1000.0f );
 		cue.endMs = idMath::Ftoi( atof( line.Mid( bar1 + 1, bar2 - bar1 - 1 ).c_str() ) * 1000.0f );
+		cue.presented = false;
 		cue.text = line.Right( line.Length() - bar2 - 1 );
 	}
 }
@@ -193,6 +221,16 @@ void WrapText( const idFont* font, float scale, const idStr& text, float maxWidt
 
 }	// namespace
 
+void Subtitles_BeginConversation( idSoundWorld* world )
+{
+	if( world != NULL )
+	{
+		conversation = {};
+		conversation.world = static_cast<idSoundWorldLocal*>( world );
+		conversation.firstStartTime = conversation.world->GetSoundTime();
+	}
+}
+
 /*
 ========================
 Subtitles_SoundStarted
@@ -200,14 +238,14 @@ Subtitles_SoundStarted
 Called by idSoundEmitterLocal::StartSound once a channel has been set up.
 ========================
 */
-void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int emitterId, int emitterIndex, const soundShaderParms_t& parms, const char* sampleName, int startTime )
+void Subtitles_SoundStarted( idSoundWorldLocal* world, const idSoundChannel* channel, int length )
 {
-	if( !s_subtitles.GetBool() || world == NULL || sampleName == NULL )
+	if( !s_subtitles.GetBool() || length <= 0 || ( channel->parms.soundShaderFlags & ( SSF_LOOPING | SSF_NO_SUBTITLES ) ) != 0 )
 	{
 		return;
 	}
 
-	idStr name = sampleName;
+	idStr name = channel->leadinSample->GetName();
 	name.BackSlashesToSlashes();
 	name.ToLower();
 	if( name.Find( "sound/vo/" ) != 0 )
@@ -215,25 +253,27 @@ void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int
 		return;
 	}
 	name.StripFileExtension();
-	// The hangar guard's automatic greeting is scripted, so it need not be marked as looping.
-	if( ( parms.soundShaderFlags & SSF_LOOPING ) != 0 || name == "sound/vo/marscity/sec_hangar_trigger" )
+	// These scripted announcements restart one-shot sounds instead of looping them.
+	if( name == "sound/vo/marscity/sec_hangar_trigger" || name.Find( "sound/vo/marscity/comp_announce" ) == 0 )
 	{
 		return;
 	}
 
 	// only subtitle what the player can actually hear
-	const bool global = ( parms.soundShaderFlags & SSF_GLOBAL ) != 0;
-	const bool local = ( emitterId == world->listener.id );
-	if( !global && !local && parms.maxDistance > 0.0f )
+	const idSoundEmitterLocal* emitter = channel->emitter;
+	const bool global = ( channel->parms.soundShaderFlags & SSF_GLOBAL ) != 0;
+	const bool local = ( emitter->emitterId == world->listener.id );
+	if( !global && !local && channel->parms.maxDistance > 0.0f )
 	{
-		const float distance = ( world->listener.pos - origin ).LengthFast() * DOOM_TO_METERS;
-		if( distance >= parms.maxDistance )
+		const float distance = ( world->listener.pos - emitter->origin ).LengthFast() * DOOM_TO_METERS;
+		if( distance >= channel->parms.maxDistance )
 		{
 			return;
 		}
 	}
 
-	const char* value = idLocalization::FindString( va( "#sub_%s", name.c_str() ) );
+	const idStr key = "#sub_" + name;
+	const char* value = idLocalization::FindString( key.c_str() );
 	if( value == NULL || value[0] == '\0' )
 	{
 		if( s_subtitleDebug.GetBool() )
@@ -246,22 +286,39 @@ void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int
 	// the same line restarting replaces the old one
 	for( int i = activeSubs.Num() - 1; i >= 0; i-- )
 	{
-		if( activeSubs[i].world == world && activeSubs[i].emitterIndex == emitterIndex && activeSubs[i].name == name )
+		if( activeSubs[i].world == world && activeSubs[i].playback->emitter == emitter && activeSubs[i].name == name )
 		{
-			activeSubs.RemoveIndex( i );
+			Subtitles_SoundStopped( activeSubs[i].playback );
 		}
 	}
 
 	activeSub_t& sub = activeSubs.Alloc();
 	sub.world = world;
-	sub.emitterIndex = emitterIndex;
-	sub.startTime = startTime;
+	sub.playback = channel;
+	sub.emitterId = emitter->emitterId;
+	sub.startTime = channel->startTime;
 	sub.name = name;
 	ParseCues( value, sub.cues );
-	sub.endTime = startTime;
+	sub.endTime = sub.startTime;
 	for( int i = 0; i < sub.cues.Num(); i++ )
 	{
-		sub.endTime = Max( sub.endTime, startTime + sub.cues[i].endMs );
+		sub.endTime = Max( sub.endTime, sub.startTime + Min( length, sub.cues[i].endMs ) );
+	}
+}
+
+void Subtitles_SoundStopped( const idSoundChannel* channel )
+{
+	for( int i = activeSubs.Num() - 1; i >= 0; --i )
+	{
+		if( activeSubs[i].playback == channel )
+		{
+			activeSubs.RemoveIndex( i );
+		}
+	}
+	if( visiblePlayback == channel )
+	{
+		visiblePlayback = NULL;
+		visibleCue = -1;
 	}
 }
 
@@ -273,6 +330,9 @@ Subtitles_Clear
 void Subtitles_Clear()
 {
 	activeSubs.Clear();
+	conversationVoices.Clear();
+	visiblePlayback = NULL;
+	visibleCue = -1;
 	conversation = {};
 }
 
@@ -345,6 +405,14 @@ void Subtitles_Draw( const idFont* font )
 	}
 
 	const int now = world->GetSoundTime();
+	for( int i = activeSubs.Num() - 1; i >= 0; --i )
+	{
+		const activeSub_t& sub = activeSubs[i];
+		if( sub.world != world || now >= sub.endTime || now < sub.startTime - 1000 )
+		{
+			Subtitles_SoundStopped( sub.playback );
+		}
+	}
 	if( conversation.world != world )
 	{
 		conversation = {};
@@ -370,7 +438,7 @@ void Subtitles_Draw( const idFont* font )
 	{
 		for( const activeSub_t& sub : activeSubs )
 		{
-			if( conversation.Matches( sub ) && now < sub.endTime && now >= sub.startTime - 1000 )
+			if( conversation.Matches( sub ) )
 			{
 				onlySpeaker = true;
 				break;
@@ -383,18 +451,13 @@ void Subtitles_Draw( const idFont* font )
 	}
 
 	// Choose the active cue that started most recently in sound-world time.
-	idStr shown;
+	activeSub_t* selected = NULL;
+	int selectedCue = -1;
 	int latestStart = 0;
 	for( int i = 0; i < activeSubs.Num(); i++ )
 	{
 		activeSub_t& sub = activeSubs[i];
-		if( sub.world != world || now > sub.endTime || now < sub.startTime - 1000 )
-		{
-			activeSubs.RemoveIndex( i );
-			i--;
-			continue;
-		}
-		if( onlySpeaker && !conversation.Matches( sub ) )
+		if( !conversation.Matches( sub ) && ( onlySpeaker || WasConversationVoice( sub ) ) )
 		{
 			continue;
 		}
@@ -404,15 +467,19 @@ void Subtitles_Draw( const idFont* font )
 			const subCue_t& cue = sub.cues[j];
 			const int cueStart = sub.startTime + cue.startMs;
 			if( t >= cue.startMs && t < cue.endMs && !cue.text.IsEmpty()
-				&& ( shown.IsEmpty() || cueStart >= latestStart ) )
+				&& ( !cue.presented || ( sub.playback == visiblePlayback && j == visibleCue ) )
+				&& ( selected == NULL || cueStart >= latestStart ) )
 			{
-				shown = cue.text;
+				selected = &sub;
+				selectedCue = j;
 				latestStart = cueStart;
 			}
 		}
 	}
-	if( shown.IsEmpty() )
+	if( selected == NULL )
 	{
+		visiblePlayback = NULL;
+		visibleCue = -1;
 		return;
 	}
 
@@ -420,6 +487,18 @@ void Subtitles_Draw( const idFont* font )
 	{
 		return;
 	}
+	subCue_t& cue = selected->cues[selectedCue];
+	if( !cue.presented && selected->emitterId > 0 && conversation.Matches( *selected ) && !WasConversationVoice( *selected ) )
+	{
+		conversationVoice_t& voice = conversationVoices.Alloc();
+		voice.world = selected->world;
+		voice.emitterId = selected->emitterId;
+		voice.name = selected->name;
+	}
+	cue.presented = true;
+	visiblePlayback = selected->playback;
+	visibleCue = selectedCue;
+	const idStr& shown = cue.text;
 
 	const idMaterial* whiteMaterial = declManager->FindMaterial( "_white" );
 	const float scale = s_subtitleScale.GetFloat();

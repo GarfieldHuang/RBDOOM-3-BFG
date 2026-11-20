@@ -626,7 +626,8 @@ public:
 extern	idSoundSystemLocal	soundSystemLocal;
 
 // doom3bfg-cht: voice-over subtitles (snd_subtitles.cpp)
-void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int emitterId, int emitterIndex, const soundShaderParms_t& parms, const char* sampleName, int startTime );
+void Subtitles_SoundStarted( idSoundWorldLocal* world, const idSoundChannel* channel, int length );
+void Subtitles_SoundStopped( const idSoundChannel* channel );
 void Subtitles_Clear();
 
 #endif /* !__SND_LOCAL_H__ */

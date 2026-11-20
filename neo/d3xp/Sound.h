@@ -71,7 +71,7 @@ private:
 	void			Event_Timer();
 	void			Event_On();
 	void			Event_Off();
-	void			DoSound( bool play );
+	void			DoSound( bool play, bool timed = false );
 };
 
 #endif /* !__GAME_SOUND_H__ */

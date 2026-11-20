@@ -139,6 +139,7 @@ idSoundWorldLocal::FreeSoundChannel
 */
 void idSoundWorldLocal::FreeSoundChannel( idSoundChannel* channel )
 {
+	Subtitles_SoundStopped( channel );
 	channel->Mute();
 	channelAllocator.Free( channel );
 }

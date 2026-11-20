@@ -871,7 +871,7 @@ private:
 	idUserInterface* 		focusUI;				// focusGUIent->renderEntity.gui, gui2, or gui3
 	idAI* 					focusCharacter;
 	idEntityPtr<idAI>	subtitleTalkTarget;
-	friend bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
+	friend bool Subtitles_GetConversation( const idSoundWorld* world, const idSoundEmitter*& bodyEmitter, const idSoundEmitter*& headEmitter, bool& talking );
 	int						talkCursor;				// show the state of the focusCharacter (0 == can't talk/dead, 1 == ready to talk, 2 == busy talking)
 	int						focusTime;
 	idAFEntity_Vehicle* 	focusVehicle;

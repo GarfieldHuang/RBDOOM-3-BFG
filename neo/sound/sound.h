@@ -59,6 +59,7 @@ static const int	SSF_NO_FLICKER =		BIT( 8 );	// always return 1.0 for volume que
 static const int	SSF_NO_DUPS =			BIT( 9 );	// try not to play the same sound twice in a row
 static const int	SSF_VO =				BIT( 10 ); // VO - direct a portion of the sound through the center channel (set automatically on shaders that contain files that start with "sound/vo/")
 static const int	SSF_MUSIC =				BIT( 11 ); // Music - Muted when the player is playing his own music
+static const int	SSF_NO_SUBTITLES =		BIT( 12 ); // Suppress captions for scheduled background playback
 
 // these options can be overriden from sound shader defaults on a per-emitter and per-channel basis
 typedef struct
@@ -322,5 +323,6 @@ public:
 };
 
 extern idSoundSystem*	soundSystem;
+void Subtitles_BeginConversation( idSoundWorld* world );
 
 #endif /* !__SOUND__ */
