@@ -215,6 +215,11 @@ void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int
 		return;
 	}
 	name.StripFileExtension();
+	// The hangar guard's automatic greeting is scripted, so it need not be marked as looping.
+	if( ( parms.soundShaderFlags & SSF_LOOPING ) != 0 || name == "sound/vo/marscity/sec_hangar_trigger" )
+	{
+		return;
+	}
 
 	// only subtitle what the player can actually hear
 	const bool global = ( parms.soundShaderFlags & SSF_GLOBAL ) != 0;
