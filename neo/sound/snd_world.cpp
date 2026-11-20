@@ -576,6 +576,7 @@ idSoundWorldLocal::ClearAllSoundEmitters
 */
 void idSoundWorldLocal::ClearAllSoundEmitters()
 {
+	Subtitles_Clear();
 	for( int i = 0; i < emitters.Num(); i++ )
 	{
 		emitters[i]->Reset();

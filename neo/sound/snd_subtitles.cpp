@@ -22,6 +22,8 @@ like the rest of the engine source.
 
 #include "snd_local.h"
 
+bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking );
+
 idCVar s_subtitles( "s_subtitles", "1", CVAR_SOUND | CVAR_BOOL | CVAR_ARCHIVE, "show subtitles for voice-over" );
 idCVar s_subtitleScale( "s_subtitleScale", "0.34", CVAR_SOUND | CVAR_FLOAT | CVAR_ARCHIVE, "subtitle text scale (48 pt font units)" );
 // Use the localized font directly: fonts registered before the language dictionary
@@ -43,6 +45,7 @@ struct subCue_t
 struct activeSub_t
 {
 	idSoundWorldLocal*	world;
+	int					emitterIndex;
 	int					startTime;		// sound world time the sample started
 	int					endTime;		// last cue end, in sound world time
 	idStr				name;
@@ -50,6 +53,24 @@ struct activeSub_t
 };
 
 idList<activeSub_t> activeSubs;
+
+struct subtitleConversation_t
+{
+	idSoundWorldLocal*	world = NULL;
+	int					bodyEmitter = -1;
+	int					headEmitter = -1;
+	bool				talking = false;
+	int					lastStartTime = 0;
+
+	bool Matches( const activeSub_t& sub ) const
+	{
+		return sub.world == world
+			&& ( sub.emitterIndex == bodyEmitter || sub.emitterIndex == headEmitter )
+			&& ( talking || sub.startTime <= lastStartTime );
+	}
+};
+
+subtitleConversation_t conversation;
 
 void ParseCues( const char* value, idList<subCue_t>& cues )
 {
@@ -180,7 +201,7 @@ Subtitles_SoundStarted
 Called by idSoundEmitterLocal::StartSound once a channel has been set up.
 ========================
 */
-void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int emitterId, const soundShaderParms_t& parms, const char* sampleName, int startTime )
+void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int emitterId, int emitterIndex, const soundShaderParms_t& parms, const char* sampleName, int startTime )
 {
 	if( !s_subtitles.GetBool() || world == NULL || sampleName == NULL )
 	{
@@ -221,7 +242,7 @@ void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int
 	// the same line restarting replaces the old one
 	for( int i = activeSubs.Num() - 1; i >= 0; i-- )
 	{
-		if( activeSubs[i].name == name )
+		if( activeSubs[i].world == world && activeSubs[i].emitterIndex == emitterIndex && activeSubs[i].name == name )
 		{
 			activeSubs.RemoveIndex( i );
 		}
@@ -229,6 +250,7 @@ void Subtitles_SoundStarted( idSoundWorldLocal* world, const idVec3& origin, int
 
 	activeSub_t& sub = activeSubs.Alloc();
 	sub.world = world;
+	sub.emitterIndex = emitterIndex;
 	sub.startTime = startTime;
 	sub.name = name;
 	ParseCues( value, sub.cues );
@@ -247,6 +269,7 @@ Subtitles_Clear
 void Subtitles_Clear()
 {
 	activeSubs.Clear();
+	conversation = {};
 }
 
 /*
@@ -258,21 +281,54 @@ Called from idCommonLocal::Draw after the game view.
 */
 void Subtitles_Draw()
 {
-	if( activeSubs.Num() == 0 )
-	{
-		return;
-	}
 	idSoundWorldLocal* world = soundSystemLocal.currentSoundWorld;
 	if( !s_subtitles.GetBool() || world == NULL )
 	{
-		activeSubs.Clear();
+		Subtitles_Clear();
 		return;
 	}
 
 	const int now = world->GetSoundTime();
+	if( conversation.world != world )
+	{
+		conversation = {};
+	}
+	const bool wasTalking = conversation.talking;
+	conversation.talking = false;
+	if( Subtitles_GetConversation( world, conversation.bodyEmitter, conversation.headEmitter, conversation.talking ) )
+	{
+		conversation.world = world;
+		if( !conversation.talking )
+		{
+			conversation.lastStartTime = now;
+		}
+	}
+	else if( wasTalking )
+	{
+		conversation.lastStartTime = now;
+	}
 
-	// collect the cues that are on screen right now, oldest first
-	idStrList shown;
+	// Keep the speaker selected through the last cue, including gaps between cues.
+	bool onlySpeaker = conversation.talking;
+	if( conversation.world != NULL && !onlySpeaker )
+	{
+		for( const activeSub_t& sub : activeSubs )
+		{
+			if( conversation.Matches( sub ) && now < sub.endTime && now >= sub.startTime - 1000 )
+			{
+				onlySpeaker = true;
+				break;
+			}
+		}
+		if( !onlySpeaker )
+		{
+			conversation = {};
+		}
+	}
+
+	// Choose the active cue that started most recently in sound-world time.
+	idStr shown;
+	int latestStart = 0;
 	for( int i = 0; i < activeSubs.Num(); i++ )
 	{
 		activeSub_t& sub = activeSubs[i];
@@ -282,16 +338,24 @@ void Subtitles_Draw()
 			i--;
 			continue;
 		}
+		if( onlySpeaker && !conversation.Matches( sub ) )
+		{
+			continue;
+		}
 		const int t = now - sub.startTime;
 		for( int j = 0; j < sub.cues.Num(); j++ )
 		{
-			if( t >= sub.cues[j].startMs && t < sub.cues[j].endMs )
+			const subCue_t& cue = sub.cues[j];
+			const int cueStart = sub.startTime + cue.startMs;
+			if( t >= cue.startMs && t < cue.endMs && !cue.text.IsEmpty()
+				&& ( shown.IsEmpty() || cueStart >= latestStart ) )
 			{
-				shown.Append( sub.cues[j].text );
+				shown = cue.text;
+				latestStart = cueStart;
 			}
 		}
 	}
-	if( shown.Num() == 0 )
+	if( shown.IsEmpty() )
 	{
 		return;
 	}
@@ -318,16 +382,8 @@ void Subtitles_Draw()
 	const float ascender = font->GetAscender( scale );
 	const float pad = 4.0f;
 
-	// newest cue at the bottom, at most 3 lines in total
 	idStrList lines;
-	for( int i = 0; i < shown.Num(); i++ )
-	{
-		WrapText( font, scale, shown[i], maxWidth, lines );
-	}
-	while( lines.Num() > 3 )
-	{
-		lines.RemoveIndex( 0 );
-	}
+	WrapText( font, scale, shown, maxWidth, lines );
 
 	float y = virtH * 0.88f - ( lines.Num() - 1 ) * lineHeight;
 	for( int i = 0; i < lines.Num(); i++ )

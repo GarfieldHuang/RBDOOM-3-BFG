@@ -4212,6 +4212,16 @@ void idAI::TalkTo( idActor* actor )
 
 /*
 =====================
+idAI::IsTalkingTo
+=====================
+*/
+bool idAI::IsTalkingTo( const idActor* actor ) const
+{
+	return AI_TALK && talkTarget.GetEntity() == actor && !AI_DEAD && !IsHidden();
+}
+
+/*
+=====================
 idAI::GetEnemy
 =====================
 */

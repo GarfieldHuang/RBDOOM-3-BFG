@@ -1745,6 +1745,7 @@ idPlayer::Init
 */
 void idPlayer::Init()
 {
+	subtitleTalkTarget = NULL;
 	const char*			value;
 	const idKeyValue*	kv;
 
@@ -5759,8 +5760,42 @@ void idPlayer::Weapon_NPC()
 	if( isDown && !wasDown )
 	{
 		buttonMask |= BUTTON_ATTACK;
+		if( !common->IsMultiplayer() && this == gameLocal.GetLocalPlayer() && focusCharacter->GetTalkState() == TALK_OK )
+		{
+			subtitleTalkTarget = focusCharacter;
+		}
 		focusCharacter->TalkTo( this );
 	}
+}
+
+bool Subtitles_GetConversation( const idSoundWorld* world, int& bodyEmitter, int& headEmitter, bool& talking )
+{
+	if( world != gameSoundWorld )
+	{
+		return false;
+	}
+	idPlayer* player = gameLocal.GetLocalPlayer();
+	if( player == NULL )
+	{
+		return false;
+	}
+	idAI* speaker = player->subtitleTalkTarget.GetEntity();
+	if( speaker == NULL )
+	{
+		return false;
+	}
+
+	const idSoundEmitter* body = speaker->GetSoundEmitter();
+	const idEntity* headEntity = speaker->GetHeadEntity();
+	const idSoundEmitter* head = headEntity != NULL ? headEntity->GetSoundEmitter() : NULL;
+	bodyEmitter = body != NULL ? body->Index() : -1;
+	headEmitter = head != NULL ? head->Index() : -1;
+	talking = player->health > 0 && speaker->IsTalkingTo( player );
+	if( !talking )
+	{
+		player->subtitleTalkTarget = NULL;
+	}
+	return true;
 }
 
 /*

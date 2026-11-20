@@ -921,7 +921,7 @@ int idSoundEmitterLocal::StartSound( const idSoundShader* shader, const s_channe
 		chan->endTime = chan->startTime + length + 100;
 	}
 	// doom3bfg-cht: voice-over subtitles
-	Subtitles_SoundStarted( soundWorld, origin, emitterId, chanParms, leadinSample->GetName(), chan->startTime );
+	Subtitles_SoundStarted( soundWorld, origin, emitterId, index, chanParms, leadinSample->GetName(), chan->startTime );
 
 	if( showStartSound )
 	{

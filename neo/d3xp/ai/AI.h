@@ -283,6 +283,7 @@ public:
 	void					HeardSound( idEntity* ent, const char* action );
 	idActor*					GetEnemy() const;
 	void					TalkTo( idActor* actor );
+	bool					IsTalkingTo( const idActor* actor ) const;
 	talkState_t				GetTalkState() const;
 
 	bool					GetAimDir( const idVec3& firePos, idEntity* aimAtEnt, const idEntity* ignore, idVec3& aimDir ) const;
