@@ -461,30 +461,22 @@ void idMenuScreen_Shell_Save::DeleteGame( int index )
 	class idSWFScriptFunction_DeleteGame : public idSWFScriptFunction_RefCounted
 	{
 	public:
-		idSWFScriptFunction_DeleteGame( gameDialogMessages_t _msg, bool _accept, int _index, idMenuScreen_Shell_Save* _screen )
+		explicit idSWFScriptFunction_DeleteGame( const char* slot )
+			: slotName( slot )
 		{
-			msg = _msg;
-			accept = _accept;
-			index = _index;
-			screen = _screen;
 		}
 		idSWFScriptVar Call( idSWFScriptObject* thisObject, const idSWFParmList& parms )
 		{
-			common->Dialog().ClearDialog( msg );
-			if( accept && screen != NULL )
+			const idStr selectedSlot = slotName;
+			common->Dialog().ClearDialog( GDM_DELETE_SAVE );
+			if( !selectedSlot.IsEmpty() )
 			{
-				if( index < screen->GetSortedSaves().Num() )
-				{
-					session->DeleteSaveGameSync( screen->GetSortedSaves()[ index ].slotName );
-				}
+				session->DeleteSaveGameSync( selectedSlot.c_str() );
 			}
 			return idSWFScriptVar();
 		}
 	private:
-		gameDialogMessages_t msg;
-		int index;
-		bool accept;
-		idMenuScreen_Shell_Save* screen;
+		idStr slotName;
 	};
 
 	bool hasAutosave = false;
@@ -503,7 +495,12 @@ void idMenuScreen_Shell_Save::DeleteGame( int index )
 		index--;	// Subtract 1 from the index for 'New Game'
 	}
 
-	common->Dialog().AddDialog( GDM_DELETE_SAVE, DIALOG_ACCEPT_CANCEL, new idSWFScriptFunction_DeleteGame( GDM_DELETE_SAVE, true, index, this ), new idSWFScriptFunction_DeleteGame( GDM_DELETE_SAVE, false, index, this ), false );
+	if( index < 0 || index >= sortedSaves.Num() )
+	{
+		return;
+	}
+	common->Dialog().AddDialog( GDM_DELETE_SAVE, DIALOG_ACCEPT_CANCEL,
+		new idSWFScriptFunction_DeleteGame( sortedSaves[index].slotName.c_str() ), new idSWFScriptFunction_DeleteGame( "" ), false );
 
 }
 
